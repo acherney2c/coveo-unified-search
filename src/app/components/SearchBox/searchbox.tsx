@@ -1,24 +1,31 @@
 import React, { useEffect, useState } from "react";
 import { type SearchBox as CommerceSearchBoxController } from "@coveo/headless/commerce";
-import { type SearchBox as SearchBoxController } from "@coveo/headless";
-
-type Scope = "products" | "knowledge";
+import { type SearchBox as SearchBoxController, type Tab as TabController } from "@coveo/headless";
 
 export function SearchBox({
   commerceSearchBoxController,
-  searchBoxController,
+  allSearchBoxController,
+  articlesSearchBoxController,
+  allTabController,
+  articlesTabController,
 }: {
   commerceSearchBoxController: CommerceSearchBoxController;
-  searchBoxController: SearchBoxController;
+  allSearchBoxController: SearchBoxController;
+  articlesSearchBoxController: SearchBoxController;
+  allTabController: TabController;
+  articlesTabController: TabController;
 }) {
   const [commerceSearchBoxState, setCommerceSearchBoxState] = useState(
     commerceSearchBoxController.state
   );
-  const [searchBoxState, setSearchBoxState] = useState(
-    searchBoxController.state
+  const [allSearchBoxState, setAllSearchBoxState] = useState(
+    allSearchBoxController.state
+  );
+  const [articlesSearchBoxState, setArticlesSearchBoxState] = useState(
+    articlesSearchBoxController.state
   );
 
-  const [scope, setScope] = useState<Scope>("products");
+
 
   useEffect(() => {
     commerceSearchBoxController.subscribe(() =>
@@ -27,63 +34,80 @@ export function SearchBox({
   }, [commerceSearchBoxController]);
 
   useEffect(() => {
-    searchBoxController.subscribe(() =>
-      setSearchBoxState({ ...searchBoxController.state })
+    allSearchBoxController.subscribe(() =>
+      setAllSearchBoxState({ ...allSearchBoxController.state })
     );
-  }, [searchBoxController]);
+  }, [allSearchBoxController]);
+
+  useEffect(() => {
+    articlesSearchBoxController.subscribe(() =>
+      setArticlesSearchBoxState({ ...articlesSearchBoxController.state })
+    );
+  }, [articlesSearchBoxController]);
 
   const [inputValue, setInputValue] = useState(commerceSearchBoxState.value);
 
   const showSuggestions = () => {
+    // Show product suggestions
     commerceSearchBoxController.showSuggestions();
-    searchBoxController.showSuggestions();
+    
+    // Select "All" tab before showing all content suggestions
+    allTabController.select();
+    allSearchBoxController.showSuggestions();
+    
+    // Select "articles" tab before showing article suggestions
+    articlesTabController.select();
+    articlesSearchBoxController.showSuggestions();
+    
+    // Revert to "All" tab as default
+    allTabController.select();
   };
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value;
     setInputValue(newValue);
     commerceSearchBoxController.updateText(newValue);
-    searchBoxController.updateText(newValue);
+    allSearchBoxController.updateText(newValue);
+    articlesSearchBoxController.updateText(newValue);
     showSuggestions();
   };
 
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    switch (event.key) {
-      case "Enter":
-        scope === "products"
-          ? commerceSearchBoxController.submit()
-          : searchBoxController.submit();
-        break;
-      default:
-        break;
+    if (event.key === "Enter") {
+      // Use the commerce search box for submitting searches
+      commerceSearchBoxController.submit();
     }
   };
 
   const handleSuggestionClick = (
     value: string,
-    type: Scope,
+    type: "products" | "all" | "articles",
   ) => {
     setInputValue(value);
+    // Update text in all controllers to keep them in sync
     commerceSearchBoxController.updateText(value);
-    searchBoxController.updateText(value);
+    allSearchBoxController.updateText(value);
+    articlesSearchBoxController.updateText(value);
 
-    type === "products"
-      ? commerceSearchBoxController.selectSuggestion(value)
-      : searchBoxController.selectSuggestion(value);
+    // Handle selection based on type
+    switch(type) {
+      case "products":
+        commerceSearchBoxController.selectSuggestion(value);
+        break;
+      case "all":
+        allTabController.select();
+        allSearchBoxController.selectSuggestion(value);
+        break;
+      case "articles":
+        articlesTabController.select();
+        articlesSearchBoxController.selectSuggestion(value);
+        break;
+    }
   };
 
   return (
     <div>
       <div>
-        <select
-          name="scope"
-          onChange={(e) => setScope(e.target.value as Scope)}
-        >
-          <optgroup label="Search scope">
-            <option value={"products" as Scope}>Products</option>
-            <option value={"knowledge" as Scope}>Knowledge</option>
-          </optgroup>
-        </select>
         <input
           onChange={handleInputChange}
           onKeyDown={handleInputKeyDown}
@@ -96,7 +120,7 @@ export function SearchBox({
         {commerceSearchBoxState.suggestions.length > 0 && (
           <div>
             <label htmlFor="product-suggestions">
-              <b>Product suggestions</b>
+              <b>Products</b>
             </label>
             <ul id="product-suggestions">
               {commerceSearchBoxState.suggestions.map((suggestion) => (
@@ -113,17 +137,37 @@ export function SearchBox({
             </ul>
           </div>
         )}
-        {searchBoxState.suggestions.length > 0 && (
+        {allSearchBoxState.suggestions.length > 0 && (
           <div>
-            <label htmlFor="knowledge-suggestions">
-              <b>Knowledge suggestions</b>
+            <label htmlFor="all-suggestions">
+              <b>All</b>
             </label>
-            <ul id="knowledge-suggestions">
-              {searchBoxState.suggestions.map((suggestion) => (
+            <ul id="all-suggestions">
+              {allSearchBoxState.suggestions.map((suggestion) => (
                 <li key={suggestion.rawValue}>
                   <button
                     onClick={() =>
-                      handleSuggestionClick(suggestion.rawValue, "knowledge")
+                      handleSuggestionClick(suggestion.rawValue, "all")
+                    }
+                  >
+                    {suggestion.rawValue}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {articlesSearchBoxState.suggestions.length > 0 && (
+          <div>
+            <label htmlFor="articles-suggestions">
+              <b>Articles</b>
+            </label>
+            <ul id="articles-suggestions">
+              {articlesSearchBoxState.suggestions.map((suggestion) => (
+                <li key={suggestion.rawValue}>
+                  <button
+                    onClick={() =>
+                      handleSuggestionClick(suggestion.rawValue, "articles")
                     }
                   >
                     {suggestion.rawValue}
