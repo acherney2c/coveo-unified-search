@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import debounce from "lodash/debounce";
 import { type SearchBox as CommerceSearchBoxController } from "@coveo/headless/commerce";
 import { type SearchBox as SearchBoxController, type Tab as TabController } from "@coveo/headless";
 
@@ -47,30 +48,45 @@ export function SearchBox({
 
   const [inputValue, setInputValue] = useState(commerceSearchBoxState.value);
 
-  const showSuggestions = () => {
-    // Show product suggestions
-    commerceSearchBoxController.showSuggestions();
-    
-    // Select "All" tab before showing all content suggestions
+  // Debounced function to update search controllers and show suggestions
+  const updateSearchAndShowSuggestions = async (value: string) => {
+    // Update commerce search first
+    commerceSearchBoxController.updateText(value);
+    await commerceSearchBoxController.showSuggestions();
+
+    // Switch to "All" tab and update
     allTabController.select();
-    allSearchBoxController.showSuggestions();
-    
-    // Select "articles" tab before showing article suggestions
+    allSearchBoxController.updateText(value);
+    await allSearchBoxController.showSuggestions();
+
+    // Switch to "Articles" tab and update
     articlesTabController.select();
-    articlesSearchBoxController.showSuggestions();
-    
-    // Revert to "All" tab as default
+    articlesSearchBoxController.updateText(value);
+    await articlesSearchBoxController.showSuggestions();
+
+    // Return to "All" tab as default
     allTabController.select();
   };
+
+  const debouncedSearch = useCallback(
+    debounce((value: string) => {
+      updateSearchAndShowSuggestions(value);
+    }, 300),
+    [commerceSearchBoxController, allSearchBoxController, articlesSearchBoxController, allTabController, articlesTabController]
+  );
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = event.target.value;
     setInputValue(newValue);
-    commerceSearchBoxController.updateText(newValue);
-    allSearchBoxController.updateText(newValue);
-    articlesSearchBoxController.updateText(newValue);
-    showSuggestions();
+    debouncedSearch(newValue);
   };
+
+  // Cleanup debounced function on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [debouncedSearch]);
 
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
